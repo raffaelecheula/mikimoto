@@ -105,7 +105,6 @@ megaJoule = mega * Joule
 
 
 def Celsius_to_Kelvin(temperature):
-
     return temperature + 273.15  # [K]
 
 
@@ -115,7 +114,6 @@ def Celsius_to_Kelvin(temperature):
 
 
 def Kelvin_to_Celsius(temperature):
-
     return temperature - 273.15  # [C]
 
 
@@ -125,7 +123,6 @@ def Kelvin_to_Celsius(temperature):
 
 
 def NormalLiter(temperature, pressure):
-
     return 1e-3 * (101325 / pressure) * (temperature / 273.15)  # [m^3]
 
 
@@ -135,7 +132,6 @@ def NormalLiter(temperature, pressure):
 
 
 def NormalCubicMeter(temperature, pressure):
-
     return (101325 / pressure) * (temperature / 273.15)  # [m^3]
 
 

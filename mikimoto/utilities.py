@@ -4,10 +4,39 @@
 
 import numpy as np
 from ase.formula import Formula
+from ase.data import atomic_masses, atomic_numbers
+
+# -----------------------------------------------------------------------------
+# COMPOSITION ANALYSIS
+# -----------------------------------------------------------------------------
+
+
+def get_composition_dict(species, name_analyzer=None):
+    """Get a dictionary with the number of atoms for the elements of a species."""
+    from mikimoto.microkinetics import Species
+    if isinstance(species, Species):
+        species = species.name
+    if name_analyzer:
+        return name_analyzer.get_composition(species)
+    else:
+        return Formula(species, strict=True).count()
+
+
+def get_elements_from_species_list(species, name_analyzer=None):
+    """Get a list of elements from a list of species."""
+    return list(get_composition_dict("".join(species), name_analyzer).keys())
+
+
+def get_molecular_mass(species, name_analyzer=None):
+    """Get the molecular mass of a species."""
+    comp_dict = get_composition_dict(species=species, name_analyzer=name_analyzer)
+    return sum([atomic_masses[atomic_numbers[ii]]*comp_dict[ii] for ii in comp_dict])
+
 
 # -----------------------------------------------------------------------------
 # NAME ANALYZER
 # -----------------------------------------------------------------------------
+
 
 class NameAnalyzer():
 
@@ -107,6 +136,7 @@ class NameAnalyzer():
             raise RuntimeError(
                 f'Error in: {name}. Elements in reactants and products do not match.'
             )
+
 
 # -----------------------------------------------------------------------------
 # END

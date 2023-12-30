@@ -241,7 +241,7 @@ print(f'Execution time: {timeit.default_timer()-start:9.4f} [s]')
 calculate_DRC = True
 
 contact_time_DRC = 1e-9
-delta_e_DRC = 1e-3 * units_energy # [eV]
+delta_e_DRC = 1e-3 * units_energy # [eV/molecule]
 ###species_DRC = 'OOC'
 species_DRC = 'CO'
 

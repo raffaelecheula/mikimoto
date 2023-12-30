@@ -53,21 +53,21 @@ class Solution:
         self,
         species,
         reactions,
-        temperature,
-        pressure,
+        temperature, # [K]
+        pressure, # [Pa]
         pressure_ref = 1 * units.atm, # [Pa]
     ):
         self.species = species
         self.reactions = reactions
-        self.pressure_ref = pressure_ref
-        self.temperature = temperature
-        self.pressure = pressure
+        self.pressure_ref = pressure_ref # [Pa]
+        self.temperature = temperature # [K]
+        self.pressure = pressure # [Pa]
         self.n_species = len(self.species)
         self.n_reactions = len(self.reactions)
 
     @property
     def temperature(self):
-        return self._temperature
+        return self._temperature # [K]
 
     @temperature.setter
     def temperature(self, temperature):
@@ -78,7 +78,7 @@ class Solution:
 
     @property
     def pressure(self):
-        return self._pressure
+        return self._pressure # [Pa]
 
     @pressure.setter
     def pressure(self, pressure):
@@ -88,7 +88,7 @@ class Solution:
 
     @property
     def conc_ref(self):
-        return self._conc_ref
+        return self._conc_ref # [kmol/m^3]
 
     @conc_ref.setter
     def conc_ref(self, conc_ref):
@@ -103,21 +103,21 @@ class Interface:
         self,
         species,
         reactions,
-        temperature,
-        pressure,
-        sites_conc,
+        temperature, # [K]
+        pressure, # [Pa]
+        sites_conc, # [kmol/m^3]
     ):
         self.species = species
         self.reactions = reactions
-        self.temperature = temperature
-        self.pressure = pressure
-        self.sites_conc = sites_conc
+        self.temperature = temperature # [K]
+        self.pressure = pressure # [Pa]
+        self.sites_conc = sites_conc # [kmol/m^3]
         self.n_species = len(self.species)
         self.n_reactions = len(self.reactions)
 
     @property
     def temperature(self):
-        return self._temperature
+        return self._temperature # [K]
 
     @temperature.setter
     def temperature(self, temperature):
@@ -127,7 +127,7 @@ class Interface:
 
     @property
     def pressure(self):
-        return self._pressure
+        return self._pressure # [Pa]
 
     @pressure.setter
     def pressure(self, pressure):
@@ -137,7 +137,7 @@ class Interface:
 
     @property
     def sites_conc(self):
-        return self._sites_conc
+        return self._sites_conc # [kmol/m^3]
 
     @sites_conc.setter
     def sites_conc(self, sites_conc):
@@ -150,19 +150,17 @@ class Microkinetics:
     
     def __init__(
         self,
-        temperature,
-        pressure,
+        temperature, # [K]
+        pressure, # [Pa]
         gas_phases = [],
         surf_phases = [],
         log_rates_eval = False,
-        units_energy = units.J/units.kmol, # [J/mol]
     ):
         self.temperature = temperature # [K]
         self.pressure = pressure # [Pa]
         self.gas_phases = gas_phases
         self.surf_phases = surf_phases
         self.log_rates_eval = log_rates_eval
-        self.units_energy = units_energy
         
         # Inizialize the model and calculate stoichiometric coefficients.
         self.initialize()
@@ -262,7 +260,7 @@ class Microkinetics:
 
         # Calculate kinetic constants (forward and reverse).
         A_pre = units.kB*self.temperature/units.hP # [1/s]
-        denom = units.Rgas*self.temperature/self.units_energy
+        denom = units.Rgas*self.temperature
         self.kin_const_for = np.multiply(
             A_pre*np.exp(-act_energies_for/denom), self.conc_tot_reactions
         ) # [kmol/m^3/s]

@@ -14,6 +14,18 @@ from mikimoto.energy_references import (
 # PARAMETERS
 # -----------------------------------------------------------------------------
 
+# Read NASA coefficients of gas phase molecules.
+
+# Read DFT gas phase molecules.
+
+# Read DFT clean slab structure.
+
+# Read DFT adsorbates structures.
+
+# Read DFT transition state structures.
+
+# Calculate correction to energies of DFT gas phase molecules.
+
 # These are the energies (at 0 K) from experimental data (e.g., NIST-Janaf or
 # NASA coefficients).
 energy_dict_NASA = {
@@ -53,7 +65,7 @@ energy_dict_DFT = {
     spec: energy_dict_DFT[spec]+energy_dict_corr[spec] 
     for spec in energy_dict_DFT
 }
-print(energy_dict_DFT)
+#print(energy_dict_DFT)
 
 # These are the species that we want to use as reference for the calculation
 # of the energies.
@@ -70,20 +82,45 @@ energy_dict = change_reference_energies(
     energy_ref_dict = energy_ref_dict,
     name_analyzer = None,
 )
-print(energy_dict)
+#print(energy_dict)
 
-from mikimoto.thermodynamics import ThermoCanteraConstantCp
+########
+# TESTS:
+########
 
+sites_area = 105.945/9 * units.Ang**2 # [m^2]
+sites_surf_conc = 1/sites_area/units.Navo # [kmol/m^2]
+temperature = 320.+273.15
+pressure_ref = 1 * units.atm
+
+from mikimoto.microkinetics import Species
+from mikimoto.thermodynamics import ThermoCanteraConstantCp, Thermo2Dgas
+from mikimoto.utilities import get_molecular_mass
+
+species_name = 'H2'
 thermo = ThermoCanteraConstantCp(
-    enthalpy_ref=1.,
-    entropy_ref=1.,
-    specific_heat_ref=1.,
-    temperature_ref=300.,
+    enthalpy_ref=0.,
+    entropy_ref=0.,
+    specific_heat_ref=0.,
+    temperature_ref=320.+273.15,
+)
+species = Species(name=species_name, thermo=thermo)
+
+thermo = Thermo2Dgas(
+    species = species,
+    sites_surf_conc = sites_surf_conc,
+    temperature = temperature,
 )
 
-thermo.temperature = 300.
+print(-thermo.entropy_std*temperature / (units.eV/units.molecule))
 
-print(thermo.enthalpy)
+molecular_mass = get_molecular_mass(species=species_name)
+k_for = (
+    pressure_ref/sites_surf_conc/np.sqrt(2*np.pi*molecular_mass*units.Rgas*temperature)
+) # [1/s]
+delta_entropy = units.Rgas * np.log(k_for*units.hP/units.kB/temperature)
+
+print(-delta_entropy*temperature / (units.eV/units.molecule))
 
 # -----------------------------------------------------------------------------
 # END

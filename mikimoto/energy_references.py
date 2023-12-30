@@ -3,24 +3,11 @@
 # -----------------------------------------------------------------------------
 
 import numpy as np
-from ase.formula import Formula
+from mikimoto.utilities import get_composition_dict, get_elements_from_species_list
 
 # -----------------------------------------------------------------------------
 # ENERGY REFERENCES
 # -----------------------------------------------------------------------------
-
-
-def get_composition_dict(species, name_analyzer=None):
-    """Get a dictionary with the number of atoms for the elements of a species."""
-    if name_analyzer:
-        return name_analyzer.get_composition(species)
-    else:
-        return Formula(species, strict=True).count()
-
-
-def get_elements_from_species_list(species, name_analyzer=None):
-    """Get a list of elements from a list of species."""
-    return list(get_composition_dict("".join(species), name_analyzer).keys())
 
 
 def get_composition_matrix(species, elements, name_analyzer=None):
