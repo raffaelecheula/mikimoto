@@ -26,6 +26,8 @@ class Species:
         self.thermo = thermo
         self.composition = name_analyzer.get_composition(self.name)
         self.size = name_analyzer.get_size(self.name)
+        self.X = None
+        self.θ = None
 
 
 class Reaction(Species):
@@ -96,6 +98,28 @@ class Solution:
             spec.thermo.conc_ref = conc_ref
         self._conc_ref = conc_ref
 
+    @property
+    def conc_tot(self):
+        return self.pressure/(units.Rgas*self.temperature) # [kmol/m^3]
+
+    @property
+    def X_list(self):
+        return [spec.X for ii, spec in enumerate(self.species)] # [-]
+
+    @X_list.setter
+    def X_list(self, X_list):
+        for ii, spec in enumerate(self.species):
+            spec.X = X_list[ii]
+
+    @property
+    def X_dict(self):
+        return {spec.name: spec.X for spec in self.species} # [-]
+
+    @X_dict.setter
+    def X_dict(self, X_dict):
+        for spec in self.species:
+            spec.X = X_dict[spec.name]
+
 
 class Interface:
 
@@ -145,6 +169,32 @@ class Interface:
             spec.thermo.conc_ref = sites_conc
         self._sites_conc = sites_conc
 
+    @property
+    def conc_ref(self):
+        return self._sites_conc # [kmol/m^3]
+
+    @property
+    def conc_tot(self):
+        return self._sites_conc # [kmol/m^3]
+
+    @property
+    def θ_list(self):
+        return [spec.θ for ii, spec in enumerate(self.species)] # [-]
+
+    @θ_list.setter
+    def θ_list(self, θ_list):
+        for ii, spec in enumerate(self.species):
+            spec.θ = θ_list[ii]
+
+    @property
+    def θ_dict(self):
+        return {spec.name: spec.θ for spec in self.species} # [-]
+
+    @θ_dict.setter
+    def θ_dict(self, θ_dict):
+        for spec in self.species:
+            spec.θ = θ_dict[spec.name]
+
 
 class Microkinetics:
     
@@ -154,12 +204,14 @@ class Microkinetics:
         pressure, # [Pa]
         gas_phases = [],
         surf_phases = [],
+        units_energy = units.J/units.kmol,
         log_rates_eval = False,
     ):
         self.temperature = temperature # [K]
         self.pressure = pressure # [Pa]
         self.gas_phases = gas_phases
         self.surf_phases = surf_phases
+        self.units_energy = units_energy
         self.log_rates_eval = log_rates_eval
         
         # Inizialize the model and calculate stoichiometric coefficients.
@@ -169,14 +221,22 @@ class Microkinetics:
     
         self.gas_species = []
         self.gas_reactions = []
+        self.n_gas_species_list = []
+        self.n_gas_reactions_list = []
         for phase in self.gas_phases:
             self.gas_species += phase.species
             self.gas_reactions += phase.reactions
+            self.n_gas_species_list.append(phase.n_species)
+            self.n_gas_reactions_list.append(phase.n_reactions)
         self.surf_species = []
         self.surf_reactions = []
+        self.n_surf_species_list = []
+        self.n_surf_reactions_list = []
         for phase in self.surf_phases:
             self.surf_species += phase.species
             self.surf_reactions += phase.reactions
+            self.n_surf_species_list.append(phase.n_species)
+            self.n_surf_reactions_list.append(phase.n_reactions)
 
         self.species = self.gas_species+self.surf_species
         self.reactions = self.gas_reactions+self.surf_reactions
@@ -230,24 +290,34 @@ class Microkinetics:
 
     @property
     def conc_tot_gas(self):
-        return self.pressure/units.Rgas/self.temperature
+        return self.pressure/(units.Rgas*self.temperature) # [kmol/m^3]
 
     @property
     def conc_tot_reactions(self):
         conc_tot = []
-        for phase in self.gas_phases:
-            conc_tot += [self.conc_tot_gas]*phase.n_reactions
-        for phase in self.surf_phases:
-            conc_tot += [phase.sites_conc]*phase.n_reactions
+        for phase in self.gas_phases+self.surf_phases:
+            conc_tot += [phase.conc_tot]*phase.n_reactions
         return np.array(conc_tot) # [kmol/m^3]
 
     @property
     def conc_tot_species(self):
         conc_tot = []
-        for phase in self.gas_phases:
-            conc_tot += [self.conc_tot_gas]*phase.n_species
-        for phase in self.surf_phases:
-            conc_tot += [phase.sites_conc]*phase.n_species
+        for phase in self.gas_phases+self.surf_phases:
+            conc_tot += [phase.conc_tot]*phase.n_species
+        return np.array(conc_tot) # [kmol/m^3]
+
+    @property
+    def conc_ref_reactions(self):
+        conc_tot = []
+        for phase in self.gas_phases+self.surf_phases:
+            conc_tot += [phase.conc_ref]*phase.n_reactions
+        return np.array(conc_tot) # [kmol/m^3]
+
+    @property
+    def conc_ref_species(self):
+        conc_tot = []
+        for phase in self.gas_phases+self.surf_phases:
+            conc_tot += [phase.conc_ref]*phase.n_species
         return np.array(conc_tot) # [kmol/m^3]
 
     def get_kinetic_constants(self):
@@ -260,7 +330,7 @@ class Microkinetics:
 
         # Calculate kinetic constants (forward and reverse).
         A_pre = units.kB*self.temperature/units.hP # [1/s]
-        denom = units.Rgas*self.temperature
+        denom = units.Rgas*self.temperature/self.units_energy
         self.kin_const_for = np.multiply(
             A_pre*np.exp(-act_energies_for/denom), self.conc_tot_reactions
         ) # [kmol/m^3/s]
@@ -270,30 +340,54 @@ class Microkinetics:
 
     def get_reaction_rates(self, conc, delta = 1e-50):
     
-        # Calculate concentrations divided by total concentrations, i.e.,
-        # molar fractions and surface coverages.
-        conc_over_conc_tot = np.divide(conc, self.conc_tot_species)
+        # Calculate concentrations divided by reference concentrations.
+        conc_over_conc_ref = np.divide(conc, self.conc_ref_species)
     
         # Calcualate reaction rates (forward, reverse, and net).
         if self.log_rates_eval is True:
             # This is to prevent errors in the log.
-            conc_over_conc_tot = np.abs(conc_over_conc_tot+delta)
+            conc_over_conc_ref = np.abs(conc_over_conc_ref+delta)
             # Log method: prod(A^B) = exp(sum(B*log(A)).
             self.rates_for = self.kin_const_for*np.exp(np.dot(
-                self.stoich_for, np.log(conc_over_conc_tot)
+                self.stoich_for, np.log(conc_over_conc_ref)
             ))
             self.rates_rev = self.kin_const_rev*np.exp(np.dot(
-                self.stoich_rev, np.log(conc_over_conc_tot)
+                self.stoich_rev, np.log(conc_over_conc_ref)
             ))
         else:
             self.rates_for = self.kin_const_for*np.prod(
-                np.power(conc_over_conc_tot, self.stoich_for), axis = 1
+                np.power(conc_over_conc_ref, self.stoich_for), axis = 1
             )
             self.rates_rev = self.kin_const_rev*np.prod(
-                np.power(conc_over_conc_tot, self.stoich_rev), axis = 1
+                np.power(conc_over_conc_ref, self.stoich_rev), axis = 1
             )
         self.rates_net = self.rates_for-self.rates_rev # [kmol/m^3/s]
 
+    @property
+    def X_list(self):
+        X_list = []
+        for phase in self.gas_phases:
+            X_list += phase.X_list
+        return X_list # [-]
+
+    @X_list.setter
+    def X_list(self, X_list):
+        X_list_list = np.split(X_list, self.n_gas_species_list)
+        for ii, phase in enumerate(self.gas_phases):
+            phase.X_list = X_list_list[ii]
+
+    @property
+    def θ_list(self):
+        θ_list = []
+        for phase in self.surf_phases:
+            θ_list += phase.θ_list
+        return θ_list # [-]
+
+    @θ_list.setter
+    def θ_list(self, θ_list):
+        θ_list_list = np.split(θ_list, self.n_surf_species_list)
+        for ii, phase in enumerate(self.surf_phases):
+            phase.θ_list = θ_list_list[ii]
 
 # -----------------------------------------------------------------------------
 # END

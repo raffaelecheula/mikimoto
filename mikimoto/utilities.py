@@ -45,10 +45,12 @@ class NameAnalyzer():
         site_separators = "(,)",
         react_separator = "<=>",
         text_separator = "_",
+        ignore_characters = "",
     ):
         self.site_separators = site_separators
         self.react_separator = react_separator
         self.text_separator = text_separator
+        self.ignore_characters = ignore_characters
 
     def check_name(self, name):
         """Check unwanted additional spaces in the name."""
@@ -113,7 +115,11 @@ class NameAnalyzer():
         name = name.replace(" ", "")
         for sep in self.site_separators:
             name = name.replace(sep, "+")
-        name = "".join([piece.split("_")[0] for piece in name.split("+")])
+        name = "".join(
+            [piece.split(self.text_separator)[0] for piece in name.split("+")]
+        )
+        for char in self.ignore_characters:
+            name = name.replace(char, "")
         name = name.replace("+", "")
         return Formula(name, strict=True).count()
 

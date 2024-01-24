@@ -16,12 +16,13 @@ class IdealReactor:
         microkin,
         update_kinetics = False,
         method = 'LSODA',
-        rtol = 1e-8,
+        rtol = 1e-08,
         atol = 1e-10,
         t_bound = 1e+9,
-        norm_dconc_thr = 1e-9,
+        maxerr_dconc_dt = 1e-6,
         n_steps_max = np.inf,
         n_fails_max = 1e3,
+        store_output = True,
         dense_output = False,
     ):
         self.microkin = microkin
@@ -30,9 +31,10 @@ class IdealReactor:
         self.rtol = rtol
         self.atol = atol
         self.t_bound = t_bound
-        self.norm_dconc_thr = norm_dconc_thr
+        self.maxerr_dconc_dt = maxerr_dconc_dt
         self.n_steps_max = n_steps_max
         self.n_fails_max = n_fails_max
+        self.store_output = store_output
         self.dense_output = dense_output
     
     def initialize_solver(self, fun, t0, y0):
@@ -56,9 +58,15 @@ class IdealReactor:
     
     def integrate_ode(self, fun, t0, y0):
         
-        conc_vect = [y0]
-        time_vect = [t0]
-        interp_vect = []
+        if self.store_output is True:
+            self.conc_vect = [y0]
+            self.time_vect = [t0]
+            self.temperature_vect = [self.microkin.temperature]
+            self.pressure_vect = [self.microkin.pressure]
+            self.X_vect = [self.microkin.X_list.copy()]
+            self.θ_vect = [self.microkin.θ_list.copy()]
+        if self.dense_output is True:
+            interp_vect = []
         solver = self.initialize_solver(
             fun = fun,
             t0 = t0,
@@ -66,30 +74,37 @@ class IdealReactor:
         )
         n_steps = 0
         n_fails = 0
-        self.norm_dconc = np.inf
+        self.max_dconc_dt = np.inf
         while (
             solver.status != 'finished' 
-            and self.norm_dconc > self.norm_dconc_thr
-            and n_fails < self.n_fails_max
+            and self.max_dconc_dt > self.maxerr_dconc_dt
             and n_steps < self.n_steps_max
         ):
-            solver.step()
+            try: solver.step()
+            except: pass
             if solver.status == 'failed':
                 n_fails += 1
+                y0 = solver.y + np.random.random(len(solver.y)) * 1e-6
                 solver = self.initialize_solver(
                     fun = fun,
                     t0 = solver.t,
-                    y0 = solver.y,
+                    y0 = y0,
                 )
-                continue
-            n_steps += 1
-            conc_vect.append(solver.y)
-            time_vect.append(solver.t)
-            interp_vect.append(solver.dense_output())
-        self.conc_vect = conc_vect
-        self.time_vect = time_vect
+            else:
+                n_steps += 1
+                if self.store_output is True:
+                    self.conc_vect.append(solver.y)
+                    self.time_vect.append(solver.t)
+                    self.temperature_vect.append(self.microkin.temperature)
+                    self.pressure_vect.append(self.microkin.pressure)
+                    self.X_vect.append(self.microkin.X_list.copy())
+                    self.θ_vect.append(self.microkin.θ_list.copy())
+                if self.dense_output is True:
+                    interp_vect.append(solver.dense_output())
+            if n_fails > self.n_fails_max:
+                raise RuntimeError("Calculation Failed!")
         if self.dense_output is True:
-            self.conc_out_fun = OdeSolution(time_vect, interp_vect)
+            self.conc_out_fun = OdeSolution(self.time_vect, interp_vect)
     
         return solver.y
 
@@ -107,12 +122,13 @@ class CSTReactor(IdealReactor):
         contact_time = None,
         update_kinetics = False,
         method = 'LSODA',
-        rtol = 1e-6,
-        atol = 1e-8,
+        rtol = 1e-10,
+        atol = 1e-12,
         t_bound = np.inf,
         n_steps_max = np.inf,
         n_fails_max = 1e3,
-        norm_dconc_thr = 1e-9,
+        maxerr_dconc_dt = 1e-6,
+        store_output = True,
         dense_output = False,
     ):
         self.microkin = microkin
@@ -121,9 +137,10 @@ class CSTReactor(IdealReactor):
         self.rtol = rtol
         self.atol = atol
         self.t_bound = t_bound # [s]
-        self.norm_dconc_thr = norm_dconc_thr
+        self.maxerr_dconc_dt = maxerr_dconc_dt
         self.n_steps_max = n_steps_max
         self.n_fails_max = n_fails_max
+        self.store_output = store_output
         self.dense_output = dense_output
         # We use contact_freq instead of contact_time to avoid divisions by zero
         # for cases with no flow rates (e.g., batch reactors).
@@ -138,9 +155,9 @@ class CSTReactor(IdealReactor):
     
     def integrate_volume(
         self,
-        x_in, # [-]
-        θ_in, # [-]
-        x_zero = None, # [-]
+        X_in = None, # [-]
+        θ_in = None, # [-]
+        X_zero = None, # [-]
         θ_zero = None, # [-]
     ):
         
@@ -152,15 +169,15 @@ class CSTReactor(IdealReactor):
         # dCi_dt = (Ci_in - Ci_out)*vol_flow_rate/volume + sum(Rij)
         # (Ci = Pi/Rgas/T, Ci_in = conc_zero, Ci_out = conc).
         
-        x_in = np.array(x_in)
-        θ_in = np.array(θ_in)
-        x_and_θ_in = np.concatenate([x_in, θ_in])
-        conc_in = np.multiply(x_and_θ_in, self.microkin.conc_tot_species)
+        X_in = np.array(self.microkin.X_list) if X_in is None else np.array(X_in)
+        θ_in = np.array(self.microkin.θ_list) if θ_in is None else np.array(θ_in)
+        X_and_θ_in = np.concatenate([X_in, θ_in])
+        conc_in = np.multiply(X_and_θ_in, self.microkin.conc_tot_species)
         
-        x_zero = x_in.copy() if x_zero is None else np.array(x_zero)
+        X_zero = X_in.copy() if X_zero is None else np.array(X_zero)
         θ_zero = θ_in.copy() if θ_zero is None else np.array(θ_zero)
-        x_and_θ_zero = np.concatenate([x_zero, θ_zero])
-        conc_zero = np.multiply(x_and_θ_zero, self.microkin.conc_tot_species)
+        X_and_θ_zero = np.concatenate([X_zero, θ_zero])
+        conc_zero = np.multiply(X_and_θ_zero, self.microkin.conc_tot_species)
         
         def fun_dconc_dt(time, conc):
             if self.update_kinetics is True:
@@ -170,7 +187,7 @@ class CSTReactor(IdealReactor):
                 self.microkin.stoich_coeffs.T, self.microkin.rates_net
             )
             dconc_dt += self.contact_freq*(conc_in-conc)*self.microkin.is_gas_spec
-            self.norm_dconc = np.linalg.norm(dconc_dt)/len(conc)
+            self.max_dconc_dt = np.max(dconc_dt)
             return dconc_dt
         
         # Solve the system of differential equations.
@@ -181,10 +198,13 @@ class CSTReactor(IdealReactor):
             y0 = conc_zero.copy(),
         )
         
-        x_and_θ_out = np.divide(conc_out, self.microkin.conc_tot_species)
-        x_out, θ_out = np.split(x_and_θ_out, [self.microkin.n_gas_species])
+        X_and_θ_out = np.divide(conc_out, self.microkin.conc_tot_species)
+        X_out, θ_out = np.split(X_and_θ_out, [self.microkin.n_gas_species])
         
-        return x_out, θ_out
+        self.microkin.X_list = list(X_out)
+        self.microkin.θ_list = list(θ_out)
+        
+        return X_out, θ_out
 
 
 class BatchReactor(CSTReactor):
@@ -200,7 +220,8 @@ class BatchReactor(CSTReactor):
         t_bound = np.inf,
         n_steps_max = np.inf,
         n_fails_max = 1e3,
-        norm_dconc_thr = 1e-9,
+        maxerr_dconc_dt = 1e-6,
+        store_output = True,
         dense_output = False,
     ):
         super().__init__(
@@ -214,7 +235,7 @@ class BatchReactor(CSTReactor):
             t_bound = t_bound,
             n_steps_max = n_steps_max,
             n_fails_max = n_fails_max,
-            norm_dconc_thr = norm_dconc_thr,
+            maxerr_dconc_dt = maxerr_dconc_dt,
             dense_output = dense_output,
         )
 
@@ -228,11 +249,12 @@ class PFReactor(IdealReactor):
         delta_time = 1e-7,
         update_kinetics = False,
         method = 'RK45',
-        rtol = 1e-4,
-        atol = 1e-6,
-        norm_dconc_thr = 0.,
+        rtol = 1e-08,
+        atol = 1e-10,
+        maxerr_dconc_dt = 0.,
         n_steps_max = np.inf,
         n_fails_max = 1e3,
+        store_output = True,
         dense_output = False,
     ):
         self.microkin = microkin
@@ -243,43 +265,45 @@ class PFReactor(IdealReactor):
         self.method = method
         self.rtol = rtol
         self.atol = atol
-        self.norm_dconc_thr = norm_dconc_thr
+        self.maxerr_dconc_dt = maxerr_dconc_dt
         self.n_steps_max = n_steps_max
         self.n_fails_max = n_fails_max
+        self.store_output = store_output
         self.dense_output = dense_output
         self.cstr_volume = vol_flow_rate*delta_time # [m^3]
         self.t_bound = reactor_volume/vol_flow_rate # [s]
 
     def integrate_volume(
         self,
-        x_in, # [-]
-        θ_in, # [-]
+        X_in = None, # [-]
+        θ_in = None, # [-]
     ):
 
-        x_in = np.array(x_in)
-        θ_in = np.array(θ_in)
+        X_in = np.array(self.microkin.X_list) if X_in is None else np.array(X_in)
+        θ_in = np.array(self.microkin.θ_list) if θ_in is None else np.array(θ_in)
         
         cstr = CSTReactor(
             microkin = self.microkin,
             reactor_volume = self.cstr_volume,
             vol_flow_rate = self.vol_flow_rate,
-            t_bound = 1e+9,
+            t_bound = np.inf,
+            store_output = False,
             dense_output = False,
         )
 
-        self.x_zero = x_in.copy()
+        self.X_zero = X_in.copy()
         self.θ_zero = θ_in.copy()
         def fun_dconc_dt(time, conc_gas):
-            x_in = conc_gas/self.microkin.conc_tot_gas
-            x_out, θ_out = cstr.integrate_volume(
-                x_in = x_in,
+            X_in = conc_gas/self.microkin.conc_tot_gas
+            X_out, θ_out = cstr.integrate_volume(
+                X_in = X_in,
                 θ_in = θ_in,
-                x_zero = self.x_zero,
+                X_zero = self.X_zero,
                 θ_zero = self.θ_zero,
             )
-            self.x_zero = x_out.copy()
+            self.X_zero = X_out.copy()
             self.θ_zero = θ_out.copy()
-            dconc_dt = (x_out-x_in)*self.microkin.conc_tot_gas/self.delta_time
+            dconc_dt = (X_out-X_in)*self.microkin.conc_tot_gas/self.delta_time
             return dconc_dt
         
         # Solve the system of differential equations.
@@ -287,12 +311,10 @@ class PFReactor(IdealReactor):
         conc_out = self.integrate_ode(
             fun = fun_dconc_dt,
             t0 = 0.,
-            y0 = x_in*self.microkin.conc_tot_gas,
+            y0 = X_in*self.microkin.conc_tot_gas,
         )
         
-        x_out = conc_out/self.microkin.conc_tot_gas
-        
-        return x_out
+        return self.X_zero, self.θ_zero
 
 
 class PFReactorSeriesCSTR:
@@ -303,6 +325,8 @@ class PFReactorSeriesCSTR:
         reactor_volume,
         reactor_length,
         vol_flow_rate,
+        store_output = True,
+        print_output = True,
         n_print = 10,
     ):
         self.microkin = microkin
@@ -312,27 +336,29 @@ class PFReactorSeriesCSTR:
         self.vol_flow_rate = vol_flow_rate # [m^3/s]
         self.cstr_length = reactor_length/n_cstr # [m]
         self.cstr_volume = reactor_volume/n_cstr # [m^3]
+        self.store_output = store_output
+        self.print_output = print_output
         self.n_print = n_print
 
-    def print_x_and_θ(
+    def print_X_and_θ(
         self,
         z_reactor,
-        x_array,
+        X_array,
         θ_array,
         print_names = False,
-        print_θ = True,
+        print_θ = False,
     ):
         if print_names is True:
             string = 'distance[m]'.rjust(14)
             for spec in self.microkin.gas_species:
-                string += ('x_'+spec.name+'[-]').rjust(12)
+                string += ('X_'+spec.name+'[-]').rjust(12)
             if print_θ is True:
                 for spec in self.microkin.surf_species:
                     string += ('θ_'+spec.name+'[-]').rjust(12)
             print(string)
         string = f'  {z_reactor:12f}'
         for ii, spec in enumerate(self.microkin.gas_species):
-            string += f'  {x_array[ii]:10.6f}'
+            string += f'  {X_array[ii]:10.6f}'
         if print_θ is True:
             for ii, spec in enumerate(self.microkin.surf_species):
                 string += f'  {θ_array[ii]:10.6f}'
@@ -340,8 +366,8 @@ class PFReactorSeriesCSTR:
 
     def integrate_volume(
         self,
-        x_in,
-        θ_in,
+        X_in = None,
+        θ_in = None,
     ):
 
         cstr = CSTReactor(
@@ -349,50 +375,65 @@ class PFReactorSeriesCSTR:
             reactor_volume = self.cstr_volume,
             vol_flow_rate = self.vol_flow_rate,
             t_bound = np.inf,
+            store_output = False,
             dense_output = False,
         )
 
-        x_in = np.array(x_in)
-        θ_in = np.array(θ_in)
-        x_zero = x_in.copy()
+        X_in = np.array(self.microkin.X_list) if X_in is None else np.array(X_in)
+        θ_in = np.array(self.microkin.θ_list) if θ_in is None else np.array(θ_in)
+        X_zero = X_in.copy()
         θ_zero = θ_in.copy()
         
-        self.print_x_and_θ(
-            z_reactor = 0.,
-            x_array = x_in,
-            θ_array = θ_in,
-            print_names = True,
-        )
+        if self.store_output is True:
+            self.time_vect = [0.]
+            self.X_vect = [X_in]
+            self.θ_vect = [θ_in]
+        
+        if self.print_output is True:
+            self.print_X_and_θ(
+                z_reactor = 0.,
+                X_array = X_in,
+                θ_array = θ_in,
+                print_names = True,
+            )
         
         for ii in range(self.n_cstr):
             
             z_reactor = (ii+1)*self.cstr_length
             
-            x_out, θ_out = cstr.integrate_volume(
-                x_in = x_in,
+            X_out, θ_out = cstr.integrate_volume(
+                X_in = X_in,
                 θ_in = θ_in,
-                x_zero = x_zero,
+                X_zero = X_zero,
                 θ_zero = θ_zero,
             )
             
             # As first guess of the concentrations we assume a similar gas
             # phase conversion as the previous step.
-            x_zero = x_out.copy()+(x_out-x_in)
+            X_zero = X_out.copy()+(X_out-X_in)
             θ_zero = θ_out.copy()
             
             # The gas inlet of the next CSTR control volume is equal to the 
             # outlet of the current CSTR control volume.
-            x_in = x_out.copy()
+            X_in = X_out.copy()
+            
+            if self.store_output is True:
+                self.time_vect.append((ii+1)*self.cstr_volume/self.vol_flow_rate)
+                self.X_vect.append(X_out)
+                self.θ_vect.append(θ_out)
             
             # Print to screen the gas composition.
-            print_int = int(self.n_cstr/self.n_print) if self.n_cstr > 1 else 1
-            if print_int > 0 and (ii+1) % print_int == 0:
-                self.print_x_and_θ(
-                    z_reactor = z_reactor,
-                    x_array = x_out,
-                    θ_array = θ_out,
-                    print_names = False,
-                )
+            if self.print_output is True:
+                print_int = int(self.n_cstr/self.n_print) if self.n_cstr > 1 else 1
+                if print_int > 0 and (ii+1) % print_int == 0:
+                    self.print_X_and_θ(
+                        z_reactor = z_reactor,
+                        X_array = X_out,
+                        θ_array = θ_out,
+                        print_names = False,
+                    )
+
+        return X_out, θ_out
 
 # -----------------------------------------------------------------------------
 # END
