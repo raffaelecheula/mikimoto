@@ -81,20 +81,6 @@ class NameAnalyzer():
                 pieces += [piece]
         return " + ".join(pieces)
 
-    def get_n_pieces_gas_ads(self, name, index = 0):
-        """Get the number of gaseous and adsorbate species."""
-        if self.react_separator in name:
-            name = self.get_names_reactants_products(name=name)[index]
-        name = self.get_name_without_mult_integers(name=name)
-        n_pieces_gas = 0
-        n_pieces_ads = 0
-        for piece in name.split(" + "):
-            if self.site_separators[0] in piece:
-                n_pieces_ads += 1
-            else:
-                n_pieces_gas += 1
-        return n_pieces_gas, n_pieces_ads
-
     def get_reactants(self, name):
         """Get a list of reactants of the reaction."""
         name = self.get_names_reactants_products(name=name)[0]
@@ -106,6 +92,36 @@ class NameAnalyzer():
         name = self.get_names_reactants_products(name=name)[1]
         name = self.get_name_without_mult_integers(name=name)
         return name.split(" + ")
+
+    def get_gas_ads_species_dict(self, name):
+        """Get a dictionary of gas species and adsorbed species."""
+        gas_ads_dict = {}
+        reactants = self.get_reactants(name)
+        gas_ads_dict['reactants_gas'] = [
+            spec for spec in reactants if self.site_separators[0] not in spec
+        ]
+        gas_ads_dict['reactants_ads'] = [
+            spec for spec in reactants if self.site_separators[0] in spec
+        ]
+        
+        products = self.get_products(name)
+        gas_ads_dict['products_gas'] = [
+            spec for spec in products if self.site_separators[0] not in spec
+        ]
+        gas_ads_dict['products_ads'] = [
+            spec for spec in products if self.site_separators[0] in spec
+        ]
+        return gas_ads_dict
+
+    def get_gas_species(self, name):
+        """Get all the gas species in the name."""
+        gas_ads_dict = self.get_gas_ads_species_dict(name)
+        return gas_ads_dict['reactants_gas']+gas_ads_dict['products_gas']
+
+    def get_ads_species(self, name):
+        """Get all the ads species in the name."""
+        gas_ads_dict = self.get_gas_ads_species_dict(name)
+        return gas_ads_dict['reactants_ads']+gas_ads_dict['products_ads']
 
     def get_composition(self, name, index = 0):
         """Get composition of a species."""

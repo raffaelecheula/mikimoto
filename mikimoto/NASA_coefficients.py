@@ -6,6 +6,8 @@ import numpy as np
 from scipy.optimize import least_squares
 from mikimoto import units
 
+# TODO: maybe change this and use the mikimoto.thermo classes
+
 # -----------------------------------------------------------------------------
 # READ VIB ENERGIES
 # -----------------------------------------------------------------------------

@@ -22,65 +22,74 @@ class Thermo:
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
-        self.temperature = temperature
-        self.conc = conc
-        self.conc_ref = conc_ref
+        self.temperature = temperature # [K]
+        self.conc = conc # [kmol/m^3]
+        self.conc_ref = conc_ref # [kmol/m^3]
 
     @property
     def temperature(self):
+        """Temperature of the species."""
         if self._temperature is None:
             raise RuntimeError("temperature not set.")
-        return self._temperature
+        return self._temperature # [K]
 
     @temperature.setter
     def temperature(self, temperature):
-        self._temperature = temperature
+        self._temperature = temperature # [K]
 
     @property
     def conc(self):
+        """Molar concentration of the species."""
         if self._conc is None:
             raise RuntimeError("conc not set.")
-        return self._conc
+        return self._conc # [kmol/m^3]
 
     @conc.setter
     def conc(self, conc):
-        self._conc = conc
+        self._conc = conc # [kmol/m^3]
 
     @property
     def conc_ref(self):
+        """Reference molar concentration of the species."""
         if self._conc_ref is None:
             raise RuntimeError("conc_ref not set.")
-        return self._conc_ref
+        return self._conc_ref # [kmol/m^3]
 
     @conc_ref.setter
     def conc_ref(self, conc_ref):
-        self._conc_ref = conc_ref
+        self._conc_ref = conc_ref # [kmol/m^3]
 
     @property
     def enthalpy(self):
-        pass
+        """Enthalpy of the species."""
+        raise RuntimeError("No enthalpy available.")
 
     @property
     def entropy_std(self):
-        pass
+        """Standard entropy of the species."""
+        raise RuntimeError("No entropy_std available.")
 
     @property
     def specific_heat(self):
-        pass
+        """Specific heat of the species."""
+        raise RuntimeError("No specific_heat available.")
 
     @property
     def Gibbs_std(self):
-        return self.enthalpy - self.temperature * self.entropy_std
+        """Standard Gibbs free energy of the species."""
+        return self.enthalpy - self.temperature * self.entropy_std # [J/kmol]
 
     @property
     def entropy(self):
-        molfract = self.conc/self.conc_ref
-        log_molfract = np.log(molfract) if molfract > 0. else -np.inf
-        return self.entropy_std + units.Rgas * self.temperature * log_molfract
+        """Entropy of the species."""
+        X_spec = self.conc/self.conc_ref
+        log_X_spec = np.log(X_spec) if X_spec > 0. else -np.inf
+        return self.entropy_std + units.Rgas*self.temperature*log_X_spec # [J/kmol/K]
 
     @property
     def Gibbs(self):
-        return self.enthalpy - self.temperature * self.entropy
+        """Gibbs free energy of the species."""
+        return self.enthalpy - self.temperature*self.entropy # [J/kmol]
 
     def modify_energy(self, delta_energy):
         pass
@@ -99,7 +108,7 @@ class ThermoFixedG0(Thermo):
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
-        self.Gibbs_ref = Gibbs_ref
+        self.Gibbs_ref = Gibbs_ref # [J/kmol]
         self.pressure_ref = pressure_ref
         super().__init__(
             temperature = temperature,
@@ -121,7 +130,7 @@ class ThermoFixedG0(Thermo):
 
     @property
     def Gibbs_std(self):
-        return self.Gibbs_ref
+        return self.Gibbs_ref # [J/kmol]
 
     @property
     def entropy(self):
@@ -129,12 +138,12 @@ class ThermoFixedG0(Thermo):
 
     @property
     def Gibbs(self):
-        molfract = self.conc/self.conc_ref
-        log_molfract = np.log(molfract) if molfract > 0. else -np.inf
-        return self.Gibbs_std + units.Rgas * self.temperature * log_molfract
+        X_spec = self.conc/self.conc_ref # [-]
+        log_X_spec = np.log(X_spec) if X_spec > 0. else -np.inf
+        return self.Gibbs_std + units.Rgas*self.temperature*log_X_spec # [J/kmol]
 
     def modify_energy(self, delta_energy):
-        self.Gibbs_ref += delta_energy
+        self.Gibbs_ref += delta_energy # [J/kmol]
 
 
 class ThermoConstantCp(Thermo):
@@ -150,11 +159,11 @@ class ThermoConstantCp(Thermo):
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
-        self.enthalpy_ref = enthalpy_ref
-        self.entropy_ref = entropy_ref
-        self.specific_heat_ref = specific_heat_ref
-        self.temperature_ref = temperature_ref
-        self.pressure_ref = pressure_ref
+        self.enthalpy_ref = enthalpy_ref # [J/kmol]
+        self.entropy_ref = entropy_ref # [J/kmol/K]
+        self.specific_heat_ref = specific_heat_ref # [J/kmol/K]
+        self.temperature_ref = temperature_ref # [K]
+        self.pressure_ref = pressure_ref # [Pa]
         super().__init__(
             temperature = temperature,
             conc = conc,
@@ -165,20 +174,20 @@ class ThermoConstantCp(Thermo):
     def enthalpy(self):
         return self.enthalpy_ref + self.specific_heat_ref * (
             self.temperature - self.temperature_ref
-        )
+        ) # [J/kmol]
 
     @property
     def entropy_std(self):
         return self.entropy_ref + self.specific_heat_ref * np.log(
             self.temperature / self.temperature_ref
-        )
+        ) # [J/kmol/K]
 
     @property
     def specific_heat(self):
-        return self.specific_heat_ref
+        return self.specific_heat_ref # [J/kmol/K]
 
     def modify_energy(self, delta_energy):
-        self.enthalpy_ref += delta_energy
+        self.enthalpy_ref += delta_energy # [J/kmol]
 
 
 class ThermoNASA7(Thermo):
@@ -191,8 +200,10 @@ class ThermoNASA7(Thermo):
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
+        if isinstance(coeffs_NASA, dict):
+            coeffs_NASA = list(coeffs_NASA.values())
         self.coeffs_NASA = coeffs_NASA
-        self.pressure_ref = pressure_ref
+        self.pressure_ref = pressure_ref # [Pa]
         super().__init__(
             temperature = temperature,
             conc = conc,
@@ -208,7 +219,7 @@ class ThermoNASA7(Thermo):
             self.coeffs_NASA[3]/4 * self.temperature**4 + 
             self.coeffs_NASA[4]/5 * self.temperature**5 + 
             self.coeffs_NASA[5]
-        )
+        ) # [J/kmol]
 
     @property
     def entropy_std(self):
@@ -219,7 +230,7 @@ class ThermoNASA7(Thermo):
             self.coeffs_NASA[3]/3 * self.temperature**3 + 
             self.coeffs_NASA[4]/4 * self.temperature**4 + 
             self.coeffs_NASA[6]
-        )
+        ) # [J/kmol/K]
 
     @property
     def specific_heat(self):
@@ -229,10 +240,69 @@ class ThermoNASA7(Thermo):
             self.coeffs_NASA[2] * self.temperature**2 + 
             self.coeffs_NASA[3] * self.temperature**3 + 
             self.coeffs_NASA[4] * self.temperature**4
-        )
+        ) # [J/kmol/K]
 
     def modify_energy(self, delta_energy):
-        self.coeffs_NASA[5] += delta_energy/units.Rgas
+        self.coeffs_NASA[5] += delta_energy / units.Rgas # [J/kmol]
+
+
+class ThermoShomate(Thermo):
+
+    def __init__(
+        self,
+        coeffs_Shomate,
+        pressure_ref = 1 * units.atm, # [Pa]
+        temperature = None, # [K]
+        conc = None, # [kmol/m^3]
+        conc_ref = None, # [kmol/m^3]
+    ):
+        if isinstance(coeffs_Shomate, dict):
+            coeffs_Shomate = list(coeffs_Shomate.values())
+        self.coeffs_Shomate = coeffs_Shomate
+        self.pressure_ref = pressure_ref
+        super().__init__(
+            temperature = temperature,
+            conc = conc,
+            conc_ref = conc_ref,
+        )
+
+    @property
+    def enthalpy(self):
+        temperature_red = self.temperature/1000
+        return (
+            +self.coeffs_Shomate[0] * temperature_red + 
+            +self.coeffs_Shomate[1]/2 * temperature_red**2 + 
+            +self.coeffs_Shomate[2]/3 * temperature_red**3 + 
+            +self.coeffs_Shomate[3]/4 * temperature_red**4 + 
+            -self.coeffs_Shomate[4] / temperature_red + 
+            +self.coeffs_Shomate[5]
+        ) * (units.kiloJoule/units.mole) # [J/kmol]
+
+    @property
+    def entropy_std(self):
+        temperature_red = self.temperature/1000
+        return (
+            +self.coeffs_Shomate[0] * np.log(temperature_red) + 
+            +self.coeffs_Shomate[1] * temperature_red + 
+            +self.coeffs_Shomate[2]/2 * temperature_red**2 + 
+            +self.coeffs_Shomate[3]/3 * temperature_red**3 + 
+            -self.coeffs_Shomate[4] / (2*temperature_red**2) + 
+            +self.coeffs_Shomate[6]
+        ) * (units.Joule/units.mole/units.Kelvin) # [J/kmol/K]
+
+    @property
+    def specific_heat(self):
+        temperature_red = self.temperature/1000
+        return (
+            +self.coeffs_Shomate[0] + 
+            +self.coeffs_Shomate[1] * temperature_red + 
+            +self.coeffs_Shomate[2] * temperature_red**2 + 
+            +self.coeffs_Shomate[3] * temperature_red**3 + 
+            +self.coeffs_Shomate[4] / temperature_red**2
+        ) * (units.Joule/units.mole/units.Kelvin) # [J/kmol/K]
+
+    def modify_energy(self, delta_energy):
+        self.coeffs_Shomate[5] += delta_energy / (units.kiloJoule/units.mole)
 
 
 # -----------------------------------------------------------------------------
@@ -272,7 +342,7 @@ class ThermoAse(Thermo):
             )
         else:
             raise RuntimeError('thermo class cannot calculate enthalpy.')
-        return enthalpy * units.eV/units.molecule
+        return enthalpy * units.eV/units.molecule # [J/kmol]
     
     @property
     def entropy_std(self):
@@ -280,7 +350,7 @@ class ThermoAse(Thermo):
             temperature = self.temperature,
             verbose = False,
         )
-        return entropy * units.eV/units.molecule
+        return entropy * units.eV/units.molecule # [J/kmol/K]
 
     def modify_energy(self, delta_energy):
         self.thermo_ase.potentialenergy += delta_energy / (units.eV/units.molecule)
@@ -307,15 +377,15 @@ class ThermoCantera(Thermo):
 
     @property
     def enthalpy(self):
-        return self.thermo_ct.h(self.temperature)
+        return self.thermo_ct.h(self.temperature) # [J/kmol]
 
     @property
     def entropy_std(self):
-        return self.thermo_ct.s(self.temperature)
+        return self.thermo_ct.s(self.temperature) # [J/kmol/K]
 
     @property
     def specific_heat(self):
-        return self.thermo_ct.cp(self.temperature)
+        return self.thermo_ct.cp(self.temperature) # [J/kmol/K]
 
     def update_thermo_ct(self):
         pass
@@ -407,10 +477,53 @@ class ThermoCanteraNASA7(ThermoCantera):
         )
 
     def modify_energy(self, delta_energy):
-        self.coeffs[13] += delta_energy/ct.gas_constant
-        self.coeffs[6] += delta_energy/ct.gas_constant
+        self.coeffs[13] += delta_energy / ct.gas_constant
+        self.coeffs[6] += delta_energy / ct.gas_constant
         self.update_thermo_ct()
     
+
+class ThermoCanteraShomate(ThermoCantera):
+
+    def __init__(
+        self,
+        coeffs_Shomate,
+        temperature_low = 200.00, # [K]
+        temperature_mid = 2000.00, # [K]
+        temperature_high = 5000.00, # [K]
+        pressure_ref = ct.one_atm, # [Pa]
+        temperature = None, # [K]
+        conc = None, # [kmol/m^3]
+        conc_ref = None, # [kmol/m^3]
+    ):
+        self.pressure_ref = pressure_ref
+        self.temperature_low = temperature_low
+        self.temperature_high = temperature_high
+        if len(coeffs_Shomate) == 7:
+            self.coeffs = [temperature_mid]+list(coeffs_Shomate)*2
+        elif len(coeffs_Shomate) == 14:
+            self.coeffs = [temperature_mid]+list(coeffs_Shomate)
+        else:
+            self.coeffs = list(coeffs_Shomate)
+        self.update_thermo_ct()
+        super().__init__(
+            temperature = temperature,
+            conc = conc,
+            conc_ref = conc_ref,
+        )
+
+    def update_thermo_ct(self):
+        self.thermo_ct = ct.ShomatePoly2(
+            T_low = self.temperature_low,
+            T_high = self.temperature_high,
+            P_ref = self.pressure_ref,
+            coeffs = self.coeffs,
+        )
+
+    def modify_energy(self, delta_energy):
+        self.coeffs[13] += delta_energy / (units.kiloJoule/units.mole)
+        self.coeffs[6] += delta_energy / (units.kiloJoule/units.mole)
+        self.update_thermo_ct()
+
 
 # -----------------------------------------------------------------------------
 # THERMO ND GAS
@@ -449,10 +562,10 @@ class ThermoNDgas(Thermo):
 
     @property
     def enthalpy(self):
-        return self.thermo_3Dgas.enthalpy
+        return self.thermo_3Dgas.enthalpy # [J/kmol]
 
     def modify_energy(self, delta_energy):
-        self.thermo_3Dgas.modify_energy(delta_energy)
+        self.thermo_3Dgas.modify_energy(delta_energy) # [J/kmol]
 
 
 class Thermo2Dgas(ThermoNDgas):
@@ -460,7 +573,7 @@ class Thermo2Dgas(ThermoNDgas):
     def __init__(
         self,
         species,
-        sites_surf_conc, # [kmol/m^2]
+        conc_sites_surf, # [kmol/m^2]
         thermo_3Dgas = None,
         name_analyzer = None,
         pressure_ref = 1 * units.atm, # [Pa]
@@ -468,7 +581,7 @@ class Thermo2Dgas(ThermoNDgas):
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
-        self.sites_surf_conc = sites_surf_conc
+        self.conc_sites_surf = conc_sites_surf
         super().__init__(
             species = species,
             thermo_3Dgas = thermo_3Dgas,
@@ -482,14 +595,14 @@ class Thermo2Dgas(ThermoNDgas):
     @property
     def entropy_std(self):
         return self.thermo_3Dgas.entropy_std + units.Rgas*np.log(
-            self.pressure_ref/(units.Rgas*self.temperature)/self.sites_surf_conc
+            self.pressure_ref/(units.Rgas*self.temperature)/self.conc_sites_surf
             * units.hP/(np.sqrt(2*np.pi*self.atomic_mass*units.kB*self.temperature))
-        )
+        ) # [J/kmol/K]
 
     @property
     def specific_heat(self):
         # Calculated from d(entropy_std)/d(temperature).
-        return self.thermo_3Dgas.specific_heat - 3/2*units.Rgas
+        return self.thermo_3Dgas.specific_heat - 3/2*units.Rgas # [J/kmol/K]
 
 
 class Thermo1Dgas(Thermo):
@@ -497,7 +610,7 @@ class Thermo1Dgas(Thermo):
     def __init__(
         self,
         species,
-        sites_len_conc, # [kmol/m]
+        conc_sites_len, # [kmol/m]
         thermo_3Dgas = None,
         name_analyzer = None,
         pressure_ref = 1 * units.atm, # [Pa]
@@ -505,7 +618,7 @@ class Thermo1Dgas(Thermo):
         conc = None, # [kmol/m^3]
         conc_ref = None, # [kmol/m^3]
     ):
-        self.sites_len_conc = sites_len_conc
+        self.conc_sites_len = conc_sites_len
         super().__init__(
             species = species,
             thermo_3Dgas = thermo_3Dgas,
@@ -519,14 +632,14 @@ class Thermo1Dgas(Thermo):
     @property
     def entropy_std(self):
         return self.thermo_3Dgas.entropy_std + units.Rgas*np.log(
-            self.pressure_ref/(units.Rgas*self.temperature)/self.sites_len_conc
+            self.pressure_ref/(units.Rgas*self.temperature)/self.conc_sites_len
             * units.hP**2/(2*np.pi*self.atomic_mass*units.kB*self.temperature)
-        )
+        ) # [J/kmol/K]
 
     @property
     def specific_heat(self):
         # Calculated from d(entropy_std)/d(temperature).
-        return self.thermo_3Dgas.specific_heat - 2*units.Rgas
+        return self.thermo_3Dgas.specific_heat - 2*units.Rgas # [J/kmol/K]
 
 
 class ThermoCombo(Thermo):
@@ -563,21 +676,21 @@ class ThermoCombo(Thermo):
         return np.sum([
             self.thermo_mult[ii]*thermo.enthalpy
             for ii, thermo in enumerate(self.thermo_list)
-        ])
+        ]) # [J/kmol]
 
     @property
     def entropy_std(self):
         return np.sum([
             self.thermo_mult[ii]*thermo.entropy_std
             for ii, thermo in enumerate(self.thermo_list)
-        ])
+        ]) # [J/kmol/K]
 
     @property
     def specific_heat(self):
         return np.sum([
             self.thermo_mult[ii]*thermo.specific_heat
             for ii, thermo in enumerate(self.thermo_list)
-        ])
+        ]) # [J/kmol/K]
 
     def modify_energy(self, delta_energy):
         self.thermo_list[0].modify_energy(delta_energy)
