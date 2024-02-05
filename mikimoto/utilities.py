@@ -27,10 +27,12 @@ def get_elements_from_species_list(species, name_analyzer=None):
     return list(get_composition_dict("".join(species), name_analyzer).keys())
 
 
-def get_molecular_mass(species, name_analyzer=None):
-    """Get the molecular mass of a species."""
+def get_molar_mass(species, name_analyzer=None):
+    """Get the molar mass of a species."""
     comp_dict = get_composition_dict(species=species, name_analyzer=name_analyzer)
-    return sum([atomic_masses[atomic_numbers[ii]]*comp_dict[ii] for ii in comp_dict])
+    return sum(
+        [atomic_masses[atomic_numbers[ii]]*comp_dict[ii] for ii in comp_dict]
+    ) # [kg/kmol]
 
 
 # -----------------------------------------------------------------------------
@@ -151,6 +153,12 @@ class NameAnalyzer():
         composition = self.get_composition(name, index=index)
         size = self.get_size(name, index=index)
         return composition, size
+
+    def get_molar_mass(self, name):
+        comp_dict = self.get_composition(name)
+        return sum(
+            [atomic_masses[atomic_numbers[ii]]*comp_dict[ii] for ii in comp_dict]
+        ) # [kg/kmol]
 
     def check_reaction(self, name):
         """Check unwanted additional spaces in the name."""

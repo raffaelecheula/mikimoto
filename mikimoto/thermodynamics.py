@@ -7,7 +7,7 @@ import numpy as np
 import copy as cp
 from mikimoto import units
 from mikimoto.microkinetics import Species
-from mikimoto.utilities import get_molecular_mass
+from mikimoto.utilities import get_molar_mass
 
 # -----------------------------------------------------------------------------
 # THERMO
@@ -546,8 +546,8 @@ class ThermoNDgas(Thermo):
             self.thermo_3Dgas = species.thermo.copy()
         if thermo_3Dgas is not None:
             self.thermo_3Dgas = thermo_3Dgas.copy()
-        molec_mass = get_molecular_mass(species=species, name_analyzer=name_analyzer)
-        self.atomic_mass = molec_mass/units.Navo # [kg]
+        molar_mass = get_molar_mass(species=species, name_analyzer=name_analyzer)
+        self.atomic_mass = molar_mass/units.Navo # [kg]
         self.pressure_ref = pressure_ref
         super().__init__(
             temperature = temperature,

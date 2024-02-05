@@ -25,10 +25,7 @@ class Species:
         self.thermo = thermo
         self.composition = name_analyzer.get_composition(self.name)
         self.size = name_analyzer.get_size(self.name)
-        self.molar_mass = sum([
-            atomic_masses[atomic_numbers[elem]]*self.composition[elem]
-            for elem in self.composition
-        ]) # [kg/kmol]
+        self.molar_mass = name_analyzer.get_molar_mass(self.name) # [kg/kmol]
 
     @property
     def conc(self):
@@ -384,6 +381,24 @@ class Microkinetics:
             i_reactions += phase.n_reactions
             self.delimiter_species.append(i_species)
             self.delimiter_reactions.append(i_reactions)
+        i_species = 0
+        i_reactions = 0
+        self.delimiter_gas_species = []
+        self.delimiter_gas_reactions = []
+        for phase in self.gas_phases[:-1]:
+            i_species += phase.n_species
+            i_reactions += phase.n_reactions
+            self.delimiter_gas_species.append(i_species)
+            self.delimiter_gas_reactions.append(i_reactions)
+        i_species = 0
+        i_reactions = 0
+        self.delimiter_surf_species = []
+        self.delimiter_surf_reactions = []
+        for phase in self.surf_phases[:-1]:
+            i_species += phase.n_species
+            i_reactions += phase.n_reactions
+            self.delimiter_surf_species.append(i_species)
+            self.delimiter_surf_reactions.append(i_reactions)
         
         # Indices of gas and surface phases.
         self.indices_gas = np.arange(0, self.n_gas_species)
@@ -499,10 +514,6 @@ class Microkinetics:
             phase.pressure = pressure # [Pa]
         self._pressure = pressure # [Pa]
 
-    #@property
-    #def conc_tot_gas(self): # TODO: remove this?
-    #    return self.pressure/(units.Rgas*self.temperature) # [kmol/m^3]
-
     @property
     def conc_tot_reactions(self):
         """Array of total concentrations for the reactions, in [kmol/m^3]"""
@@ -510,20 +521,6 @@ class Microkinetics:
         for phase in self.phases:
             conc_tot += [phase.conc_tot]*phase.n_reactions
         return np.array(conc_tot) # [kmol/m^3]
-
-    #@property
-    #def conc_tot_species(self): # TODO: remove this?
-    #    conc_tot = []
-    #    for phase in self.phases:
-    #        conc_tot += [phase.conc_tot]*phase.n_species
-    #    return np.array(conc_tot) # [kmol/m^3]
-
-    #@property
-    #def conc_ref_reactions(self): # TODO: remove this?
-    #    conc_tot = []
-    #    for phase in self.phases:
-    #        conc_tot += [phase.conc_ref]*phase.n_reactions
-    #    return np.array(conc_tot) # [kmol/m^3]
 
     @property
     def conc_ref_species(self):
@@ -570,36 +567,41 @@ class Microkinetics:
             phase.rho_list = rho_list_list[ii] # [kmol/m^3]
 
     @property
-    def X_list(self):
-        """List of molar fractions of the species, in [kmol/kmol]."""
+    def X_gas_list(self):
+        """List of molar fractions of the gas species, in [kmol/kmol]."""
         X_list = []
         for phase in self.gas_phases:
             X_list += phase.X_list
         return X_list # [-]
 
-    #@X_list.setter
-    #def X_list(self, X_list):
-    #    X_list_list = np.split(X_list, self.n_gas_species_list)
-    #    for ii, phase in enumerate(self.gas_phases):
-    #        phase.X_list = X_list_list[ii]
+    @X_gas_list.setter
+    def X_gas_list(self, X_gas_list):
+        X_list_list = np.split(X_gas_list, self.delimiter_gas_species)
+        for ii, phase in enumerate(self.gas_phases):
+            phase.X_list = X_list_list[ii]
 
     @property
-    def θ_list(self):
-        """List of mass fractions of the species, in [kg/kg]."""
+    def θ_surf_list(self):
+        """List of coverages of the surface species, in [kg/kg]."""
         θ_list = []
         for phase in self.surf_phases:
             θ_list += phase.θ_list
         return θ_list # [-]
 
-    #@θ_list.setter
-    #def θ_list(self, θ_list):
-    #    θ_list_list = np.split(θ_list, self.n_surf_species_list)
-    #    for ii, phase in enumerate(self.surf_phases):
-    #        phase.θ_list = θ_list_list[ii]
+    @θ_surf_list.setter
+    def θ_surf_list(self, θ_surf_list):
+        θ_list_list = np.split(θ_surf_list, self.delimiter_surf_species)
+        for ii, phase in enumerate(self.surf_phases):
+            phase.θ_list = θ_list_list[ii]
+
+    @property
+    def conc_gas_tot(self):
+        """Total molar concentration of gas phases, in [kmol/m^3]."""
+        return sum([phase.conc_tot for phase in self.gas_phases]) # [kmol/m^3]
 
     @property
     def rho_gas_tot(self):
-        """Total density of gas, in [kg/m^3]."""
+        """Total mass concentration of gas phases, in [kg/m^3]."""
         return sum([phase.rho_tot for phase in self.gas_phases]) # [kg/m^3]
 
 # -----------------------------------------------------------------------------
