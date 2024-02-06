@@ -286,14 +286,13 @@ class PFReactor(IdealReactor):
 
         X_in = np.array(self.microkin.X_gas_list)
         θ_in = np.array(self.microkin.θ_surf_list)
-        self.X_zero = X_in.copy()
-        self.θ_zero = θ_in.copy()
         
         def fun_dconc_dt(time, conc_gas):
             X_in = conc_gas/self.microkin.conc_gas_tot
             self.microkin.X_gas_list = X_in.copy()
             cstr.integrate_volume()
             X_out = self.microkin.X_gas_list
+            self.delta_time = cstr.reactor_volume/cstr.vol_flow_rate
             dconc_dt = (X_out-X_in)*self.microkin.conc_gas_tot/self.delta_time
             return dconc_dt
         
