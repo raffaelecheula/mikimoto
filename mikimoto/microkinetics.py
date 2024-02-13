@@ -90,7 +90,7 @@ class Phase:
 
     @property
     def temperature(self):
-        """Tepmerature of the phase in [K]."""
+        """Temperature of the phase in [K]."""
         return self._temperature # [K]
 
     @temperature.setter
