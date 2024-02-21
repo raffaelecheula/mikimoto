@@ -2,7 +2,6 @@
 # IMPORTS
 # -----------------------------------------------------------------------------
 
-import cantera as ct
 import numpy as np
 from scipy.optimize import root
 from mikimoto import units
