@@ -73,7 +73,7 @@ class IdealReactor:
             solver.step()
             if solver.status == 'failed':
                 n_fails += 1
-                y0 = solver.y + np.random.random(len(solver.y)) * 1e-6
+                y0 = solver.y + np.random.random(len(solver.y)) * 1e-8
                 solver = self.initialize_solver(fun, solver.t, y0)
             else:
                 n_steps += 1
@@ -153,14 +153,16 @@ class CSTReactor(IdealReactor):
         # where V_dot_in and V_dot_out are the volumetric flow rates and MWi
         # is the molar mass.
         
+        if self.constant_temperature is False:
+            raise NotImplementedError("Adiabatic reactors not implemented.")
+        
+        # TODO: fix this!
+        """
         rho_in = np.array(self.microkin.rho_list.copy()) # [kg/m^3]
         rho_zero = rho_in.copy() # [kg/m^3]
         mass_flow_rate = self.vol_flow_rate_in*self.microkin.rho_gas_tot # [kg/s]
         moles_gas_zero = self.reactor_volume_in*self.microkin.conc_gas_tot # [kmol]
         
-        if self.constant_temperature is False:
-            raise NotImplementedError("Adiabatic reactors not implemented.")
-
         def fun_drho_dt(time, rho_list):
             if self.update_kinetics is True:
                 self.microkin.get_kinetic_constants()
@@ -178,7 +180,7 @@ class CSTReactor(IdealReactor):
                 +self.vol_flow_rate_in*rho_in/self.reactor_volume
                 -self.vol_flow_rate*rho_list/self.reactor_volume
             ) # [kg/m^3/s]
-            self.max_dy_dt = np.max(drho_dt) # [kg/m^3/s]
+            self.max_dy_dt = np.max(np.abs(drho_dt)) # [kg/m^3/s]
             return drho_dt
         
         # Solve the system of differential equations.
@@ -188,7 +190,35 @@ class CSTReactor(IdealReactor):
             t0 = 0.,
             y0 = rho_zero.copy(),
         )
+        """
+        #"""
+        #conc_in = np.array(self.microkin.conc_list.copy()) # [kmol/m^3]
+        conc_in = np.array(self.microkin.conc_list.copy(), dtype=np.longdouble) # [kmol/m^3]
+        conc_zero = conc_in.copy() # [kmol/m^3]
         
+        def fun_dconc_dt(time, conc_vect):
+            if self.update_kinetics is True:
+                self.microkin.get_kinetic_constants()
+            self.microkin.conc_list = conc_vect # [kmol/m^3/s]
+            self.microkin.get_reaction_rates(conc=conc_vect) # [kmol/m^3/s]
+            dconc_dt = self.microkin.get_net_production_rates() # [kmol/m^3/s]
+            dconc_dt += (
+                (conc_in-conc_vect)*(self.vol_flow_rate/self.reactor_volume)
+                * self.microkin.is_gas
+            ) # [kmol/m^3/s]
+            self.max_dy_dt = np.max(np.abs(dconc_dt)) # [kmol/m^3/s]
+            return dconc_dt
+        
+        
+        # Solve the system of differential equations.
+        self.microkin.get_kinetic_constants()
+        conc_out = self.integrate_ode(
+            fun = fun_dconc_dt,
+            t0 = 0.,
+            y0 = conc_zero.copy(),
+        )
+        #"""
+
 
 class BatchReactor(CSTReactor):
 
